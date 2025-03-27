@@ -12,12 +12,15 @@ app = Flask(__name__)
 
 # List of multiple queries related to job fairs
 QUERIES = [
-    "Job Mela 2025 India",
-    "Campus Recruitment 2025",
-    "Walk-in Drive for Freshers 2025",
-    "Mega Job Fair 2025",
-    "Upcoming Job Drives in India",
-    "Government Job Mela 2025",
+    "Job Mela",
+    "Recruitment Drive",
+    "Hiring Drive",
+    "Mega Job Fair",
+    "Walk in Drive",
+    "Job Expo",
+    "Employment Fair",
+    "Career Fair",
+    "Recruitment Drive",
 ]
 
 # Function to get search results from SerpAPI
