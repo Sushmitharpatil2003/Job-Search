@@ -3,29 +3,32 @@ import requests
 import json
 import os
 from dotenv import load_dotenv
+import time
 
 # Load API Keys
 load_dotenv()
-SERP_API_KEY = os.getenv("SERP_API_KEY")  # Get from SerpAPI
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+GOOGLE_CX = os.getenv("GOOGLE_CX")
+
+if not GOOGLE_API_KEY or not GOOGLE_CX:
+    raise ValueError("❌ Missing GOOGLE_API_KEY or GOOGLE_CX. Set them in .env.")
 
 app = Flask(__name__)
 
-# List of multiple queries related to job fairs
+# List of job fair-related queries
 QUERIES = [
-    "Job Mela",
-    "Recruitment Drive",
-    "Hiring Drive",
-    "Mega Job Fair",
-    "Walk in Drive",
-    "Job Expo",
-    "Employment Fair",
-    "Career Fair",
-    "Recruitment Drive",
+    '"Job Mela" +(apply OR register OR hiring OR career fair) -news -blog',
+    '"Recruitment Drive" +(apply OR register OR hiring OR career fair) -news -blog',
+    '"Mega Job Fair" +(apply OR register OR hiring OR career fair) -news -blog',
+    '"Walk-in Drive" +(apply OR register OR hiring OR career fair) -news -blog',
+    '"Job Expo" +(apply OR register OR hiring OR career fair) -news -blog',
+    '"Employment Fair" +(apply OR register OR hiring OR career fair) -news -blog',
+    '"Career Fair" +(apply OR register OR hiring OR career fair) -news -blog',
 ]
 
-# Function to get search results from SerpAPI
-def get_search_results(query):
-    url = f"https://serpapi.com/search.json?q={query}&api_key={SERP_API_KEY}"
+# Function to get job drive results from Google API
+def get_google_search_results(query):
+    url = f"https://www.googleapis.com/customsearch/v1?q={query}&key={GOOGLE_API_KEY}&cx={GOOGLE_CX}"
     response = requests.get(url)
 
     if response.status_code != 200:
@@ -33,20 +36,21 @@ def get_search_results(query):
         return []
 
     data = response.json()
-    results = [{"Query": query, "Title": result["title"], "Link": result["link"]} for result in data.get("organic_results", [])]
+    results = [{"Title": item["title"], "Link": item["link"]} for item in data.get("items", [])]
 
     return results
 
-# Function to save JSON file
+# Function to save results in a JSON file
 def save_json_file():
     all_results = []
 
     for query in QUERIES:
-        search_results = get_search_results(query)
+        search_results = get_google_search_results(query)
         if search_results:
             all_results.extend(search_results)
+        time.sleep(2)  # Add delay to prevent rate limits
 
-    file_path = os.path.join(os.getcwd(), "job_mela_results.json")  # Save in current directory
+    file_path = os.path.join(os.getcwd(), "filtered_job_drives.json")
     with open(file_path, "w", encoding="utf-8") as file:
         json.dump(all_results, file, indent=4, ensure_ascii=False)
 
@@ -57,15 +61,21 @@ def search():
     all_results = []
 
     for query in QUERIES:
-        search_results = get_search_results(query)
+        search_results = get_google_search_results(query)
         if search_results:
             all_results.extend(search_results)
 
     if not all_results:
-        return jsonify({"message": "No results found!"})
+        return jsonify({"message": "No job drives found!"}), 204
 
     return jsonify({"data": all_results})
 
+@app.route("/health", methods=["GET"])
+def health_check():
+    return jsonify({"status": "running"})
+
 if __name__ == "__main__":
-    save_json_file()  # Auto-fetch job mela details on startup
+    fetch_on_startup = os.getenv("FETCH_ON_STARTUP", "true").lower() == "true"
+    if fetch_on_startup:
+        save_json_file()
     app.run(debug=True)
