@@ -5,8 +5,14 @@ import os
 import re
 import time
 from dotenv import load_dotenv
+from dateutil import parser  # For structured date extraction
 
-# Load API Keys
+try:
+    from natty import DateParser  # For NLP-based date extraction
+except ImportError:
+    DateParser = None  # Ensure natty is optional
+
+# Load API Keys from .env file
 load_dotenv()
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 GOOGLE_CX = os.getenv("GOOGLE_CX")
@@ -27,9 +33,43 @@ QUERIES = [
     "Career Fair 2024 venue date apply register",
 ]
 
-# Regular expression patterns to extract dates and venues
+# Regular expressions for extracting dates and venues
 DATE_PATTERN = r"\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4}\b"
 VENUE_PATTERN = r"\b(?:at|in|venue[:\s])\s*([A-Z][a-z]+(?:\s[A-Z][a-z]+)*)"
+
+# Function to extract dates using dateutil
+def extract_date(text):
+    try:
+        date = parser.parse(text, fuzzy=True)
+        return date.strftime("%d %B %Y")  # Convert to "DD Month YYYY"
+    except ValueError:
+        return "Unknown"
+
+# Function to extract dates using natty NLP-based parsing
+def extract_date_nlp(text):
+    if DateParser is None:
+        return "Unknown"  # Natty is not installed
+    try:
+        dates = DateParser(text).result()
+        if dates:
+            return dates[0].strftime("%d %B %Y")
+    except Exception:
+        return "Unknown"
+
+# Combine regex + NLP + dateutil for better accuracy
+def extract_event_date(text):
+    # 1️⃣ First, try regex match
+    date_match = re.search(DATE_PATTERN, text)
+    if date_match:
+        return date_match.group(0)
+
+    # 2️⃣ Second, try structured date parsing (dateutil)
+    date = extract_date(text)
+    if date != "Unknown":
+        return date
+
+    # 3️⃣ Finally, try NLP-based parsing (natty)
+    return extract_date_nlp(text)
 
 # Function to fetch results from Google API
 def get_google_search_results(query):
@@ -48,14 +88,16 @@ def get_google_search_results(query):
         snippet = item["snippet"]  # Summary of the page
         link = item["link"]
 
-        # Extract date and venue from snippet
-        date_match = re.search(DATE_PATTERN, snippet)
+        # Extract date using the combined method
+        event_date = extract_event_date(snippet)
+
+        # Extract venue using regex
         venue_match = re.search(VENUE_PATTERN, snippet)
 
         event = {
             "Title": title,
             "Link": link,
-            "Date": date_match.group(0) if date_match else "Unknown",
+            "Date": event_date,
             "Venue": venue_match.group(1) if venue_match else "Unknown",
         }
 
